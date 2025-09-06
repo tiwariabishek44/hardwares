@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "410150168396",
+    "project_id": "hardwares-82a4e",
+    "storage_bucket": "hardwares-82a4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410150168396:android:e26ca0e9bb0d67cb6c51e9",
+        "android_client_info": {
+          "package_name": "com.example.hardwares"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDF_gXPUZOS38Jpz3t7VGli23F7g5LSsE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
