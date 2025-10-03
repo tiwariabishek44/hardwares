@@ -1,39 +1,31 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:hardwares/app/data/hardware_items.dart';
-import 'package:hardwares/app/modules/items_details/items_details.dart';
-import 'package:hardwares/app/utils/app_setting_service.dart';
+import 'package:hardwares/app/app_data/item_data_model.dart';
+import 'package:hardwares/app/utils/catalog_data_utils.dart';
 
-class HardwareCatalogController extends GetxController {
-  // Services
-  final AppSettingsService _settingsService = Get.find<AppSettingsService>();
+class CatalogController extends GetxController {
+  // Observable lists
+  var allItems = <PriceListItem>[].obs;
+  var filteredItems = <PriceListItem>[].obs;
+  var categories = <String>[].obs;
+  var companies = <String>[].obs;
+  var availableCompanies = <String>[].obs;
 
-  // Observable variables
+  // Selected values
+  var selectedCategory = 'ppr'.obs; // Default to PPR
+  var selectedCompany = 'Nepatop'.obs; // Default to Nepatop
+
+  // Loading state
   var isLoading = false.obs;
-  var selectedCategory = 'cpvc'.obs;
+
+  // Search
   var searchQuery = ''.obs;
-  var useNepaliLanguage = true.obs;
-
-  // Hardware items
-  var allItems = <HardwareItem>[].obs;
-  var filteredItems = <HardwareItem>[].obs;
-
-  // Simple plumbing categories
-  var categories = <String>[
-    'cpvc',
-    'ppr',
-    'upvc',
-    'additional_items',
-  ].obs;
-
-  // Text controllers
   final TextEditingController searchController = TextEditingController();
 
   @override
   void onInit() {
     super.onInit();
-    useNepaliLanguage.value = _settingsService.selectedLanguage.value == 'ne';
-    loadHardwareItems();
+    initializeData();
   }
 
   @override
@@ -42,51 +34,83 @@ class HardwareCatalogController extends GetxController {
     super.onClose();
   }
 
-  // Load all hardware items from data file (NO DATABASE)
-  void loadHardwareItems() {
+  void initializeData() {
     try {
       isLoading.value = true;
 
-      // Get items from static data
-      allItems.value = HardwareItemsData.getAllItems();
+      // Load all data using utils
+      allItems.value = CatalogDataUtils.getAllItems();
+      categories.value = CatalogDataUtils.getCategories();
+      companies.value = CatalogDataUtils.getCompanies();
 
+      // Set initial available companies for PPR
+      availableCompanies.value =
+          CatalogDataUtils.getCompaniesForCategory(selectedCategory.value);
+
+      // Apply initial filter
       applyFilters();
-    } catch (e) {
-      print('Error loading hardware items: $e');
-      Get.snackbar(
-        'त्रुटि / Error',
-        'हार्डवेयर सामानहरू लोड गर्न सकिएन / Could not load hardware items',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red[600],
-        colorText: Colors.white,
-      );
-    } finally {
+
       isLoading.value = false;
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('Error', 'Failed to load catalog data: ${e.toString()}');
     }
   }
 
-  // Apply filters based on category and search
-  void applyFilters() {
-    List<HardwareItem> filtered = allItems
-        .where((item) => item.category == selectedCategory.value)
-        .toList();
-
-    // Filter by search query
-    if (searchQuery.value.isNotEmpty) {
-      String query = searchQuery.value.toLowerCase();
-      filtered = filtered.where((item) {
-        return item.nameEnglish.toLowerCase().contains(query) ||
-            item.itemCode.toLowerCase().contains(query);
-      }).toList();
-    }
-
-    filteredItems.value = filtered;
-  }
-
-  // Change category filter
+  // Change category
   void changeCategory(String category) {
+    if (!CatalogDataUtils.isValidCategory(category)) return;
+
     selectedCategory.value = category;
+
+    // Update available companies
+    if (category == 'additional_items') {
+      // availableCompanies.clear();
+      // selectedCompany.value = '';
+    } else {
+      availableCompanies.value =
+          CatalogDataUtils.getCompaniesForCategory(category);
+      // Set default company to Nepatop if available
+      if (availableCompanies.contains('Nepatop')) {
+        selectedCompany.value = 'Nepatop';
+      } else if (availableCompanies.isNotEmpty) {
+        selectedCompany.value = availableCompanies.first;
+      }
+    }
+
     applyFilters();
+  }
+
+  // Change company
+  void changeCompany(String company) {
+    if (!CatalogDataUtils.isValidCompany(company)) return;
+
+    selectedCompany.value = company;
+    applyFilters();
+  }
+
+  // Apply filters
+  void applyFilters() {
+    List<PriceListItem> result;
+
+    if (selectedCategory.value == 'additional') {
+      // Additional items - no company filter
+      result = CatalogDataUtils.filterByCategory(selectedCategory.value);
+    } else if (selectedCompany.value.isEmpty) {
+      // Category only
+      result = CatalogDataUtils.filterByCategory(selectedCategory.value);
+    } else {
+      // Category and company
+      result = CatalogDataUtils.filterByCategoryAndCompany(
+          selectedCategory.value, selectedCompany.value);
+    }
+
+    // Apply search if any
+    if (searchQuery.value.isNotEmpty) {
+      result = CatalogDataUtils.searchItems(searchQuery.value, result);
+    }
+
+    filteredItems.value = result;
   }
 
   // Search items
@@ -102,63 +126,60 @@ class HardwareCatalogController extends GetxController {
     applyFilters();
   }
 
-  // Toggle language
-  void toggleLanguage() {
-    useNepaliLanguage.value = !useNepaliLanguage.value;
-    _settingsService.setLanguage(useNepaliLanguage.value ? 'ne' : 'en');
-  }
-
-  // Get category display name
+  // Getter methods using utils
   String getCategoryDisplayName(String category) {
-    switch (category) {
-      case 'cpvc':
-        return !useNepaliLanguage.value ? 'सीपीभीसी' : 'CPVC';
-      case 'ppr':
-        return !useNepaliLanguage.value ? 'पीपीआर' : 'PPR';
-      case 'upvc':
-        return !useNepaliLanguage.value ? 'यूपीभीसी' : 'UPVC';
-      case 'fittings':
-        return !useNepaliLanguage.value ? 'फिटिङहरू' : 'Fittings';
-      case 'additional_items':
-        return !useNepaliLanguage.value ? 'अतिरिक्त सामान' : 'Additional Items';
-      case 'tools':
-        return !useNepaliLanguage.value ? 'औजारहरू' : 'Tools';
-      default:
-        return category.toUpperCase();
-    }
+    return CatalogDataUtils.getCategoryDisplayName(category);
   }
 
-  // Get category color
-  Color getCategoryColor(String category) {
-    switch (category) {
-      case 'cpvc':
-        return Color(0xFFE57373); // Red
-      case 'ppr':
-        return Color(0xFF81C784); // Green
-      case 'upvc':
-        return Color(0xFF64B5F6); // Blue
-      case 'fittings':
-        return Color(0xFFFFB74D); // Orange
-      case 'additional_items':
-        return Color(0xFFBA68C8); // Purple
-      case 'tools':
-        return Color(0xFF4FC3F7); // Light blue
-      default:
-        return Color(0xFF1976D2);
-    }
+  Color getCompanyColor(String company) {
+    final colorHex = CatalogDataUtils.getCompanyColor(company);
+    return Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
   }
 
-  // Get filtered items count for each category
+  bool get shouldShowCompanyDropdown {
+    return selectedCategory.value.isNotEmpty &&
+        selectedCategory.value != 'additional_items';
+  }
+
+  int get totalItemsCount => filteredItems.length;
+
+  // Get items count for category (for UI badges)
   int getCategoryItemCount(String category) {
-    return allItems.where((item) => item.category == category).length;
+    return CatalogDataUtils.getItemsCountForCategory(category);
   }
 
-  // Show item details
-  void showItemDetails(HardwareItem item) {
-    Get.to(
-        () => ItemDetailPage(
-              item: item,
-            ),
-        transition: Transition.rightToLeft);
+  // Navigation to item details
+  void showItemDetails(PriceListItem item) {
+    // This will be implemented when you have the item details page
+    Get.snackbar('Item Selected', 'Selected: ${item.itemName}');
+  }
+
+  // Reset filters
+  void resetFilters() {
+    selectedCategory.value = 'ppr';
+    selectedCompany.value = 'Nepatop';
+    searchQuery.value = '';
+    searchController.clear();
+    availableCompanies.value = CatalogDataUtils.getCompaniesForCategory('ppr');
+    applyFilters();
+  }
+
+  // Get filter summary for UI
+  String getFilterSummary() {
+    if (selectedCategory.value.isEmpty) {
+      return 'Showing all items (${totalItemsCount})';
+    }
+
+    String categoryName = getCategoryDisplayName(selectedCategory.value);
+
+    if (selectedCategory.value == 'additional_items') {
+      return 'Showing $categoryName (${totalItemsCount})';
+    }
+
+    if (selectedCompany.value.isEmpty) {
+      return 'Showing all $categoryName items (${totalItemsCount})';
+    }
+
+    return 'Showing $categoryName from ${selectedCompany.value} (${totalItemsCount})';
   }
 }

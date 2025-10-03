@@ -13,6 +13,8 @@ import 'package:hardwares/app/utils/database_helper.dart';
 import 'package:hardwares/app/utils/app_setting_service.dart';
 import 'package:hardwares/app/utils/connectivity_services.dart';
 import 'package:hardwares/app/modules/splash_screen/splash_view.dart';
+import 'package:hardwares/app/utils/enhance_connectivity_service.dart';
+import 'package:hardwares/app/utils/enhance_firebase_sync_servicer.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 
 void main() async {
@@ -75,7 +77,11 @@ void _initializeServices() {
   Get.put(AppSettingsService(), permanent: true);
   Get.put(ConnectivityService(), permanent: true);
 
-  print('✅ Services initialized successfully');
+  // Put enhanced services
+  Get.put(EnhancedConnectivityService(), permanent: true);
+  Get.put(EnhancedFirebaseSyncService(), permanent: true);
+
+  print('✅ Enhanced services initialized successfully');
 }
 
 Future<void> _initializeDatabase() async {
@@ -94,7 +100,7 @@ class MyApp extends StatelessWidget {
     return ResponsiveSizer(
       builder: (context, orientation, screenType) {
         return GetMaterialApp(
-          title: 'Hardware App',
+          title: 'Hardware',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             primarySwatch: Colors.blue,

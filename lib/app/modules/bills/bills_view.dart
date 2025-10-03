@@ -10,7 +10,11 @@ class BillsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    controller.refreshOrders();
+    // Force refresh and debug when building
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.refreshOrders();
+    });
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),

@@ -10,7 +10,7 @@ import 'package:hardwares/app/utils/firebase_services.dart';
 
 class BillsController extends GetxController {
   // Observable variables - Only SQLite data
-  final RxBool _isLoading = true.obs; // Changed to true initially
+  final RxBool _isLoading = true.obs;
   final RxBool _isRefreshing = false.obs;
   final RxBool _isOnline = true.obs;
   final RxSet<int> _syncingOrders = <int>{}.obs;
@@ -54,20 +54,21 @@ class BillsController extends GetxController {
   void onReady() {
     super.onReady();
     log('🔄 BillsController onReady() called');
-    // Force refresh when controller is ready
-    Future.delayed(Duration(milliseconds: 100), () {
-      refreshOrders();
-    });
   }
 
-  // Initialize controller - FIXED
+  // FIXED: Initialize controller with proper order loading
   Future<void> _initializeController() async {
     try {
       log('🔄 Initializing BillsController...');
       _isLoading.value = true;
 
+      // Add debug info about database
+      await _debugDatabaseInfo();
+
       await _checkConnectivity();
       _setupConnectivityListener();
+
+      // Load orders immediately
       await loadAllOrders();
 
       log('✅ BillsController initialized successfully - ${_orders.length} orders loaded');
@@ -79,42 +80,102 @@ class BillsController extends GetxController {
     }
   }
 
-  // Load all orders from SQLite only - FIXED
+  // NEW: Debug database info
+  Future<void> _debugDatabaseInfo() async {
+    try {
+      log('🔍 DEBUG: Checking database information...');
+
+      // Check if database exists and has tables
+      final db = await _dbHelper.database;
+      log('🔍 DEBUG: Database instance obtained: ${db.path}');
+
+      // Check if orders table exists and has data
+      final result = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='orders'");
+      if (result.isEmpty) {
+        log('❌ DEBUG: Orders table does not exist!');
+        return;
+      } else {
+        log('✅ DEBUG: Orders table exists');
+      }
+
+      // Count orders directly using raw query
+      final countResult =
+          await db.rawQuery("SELECT COUNT(*) as count FROM orders");
+      final count = countResult.first['count'] as int;
+      log('🔍 DEBUG: Raw order count from database: $count');
+
+      if (count > 0) {
+        // Get first few orders to check structure
+        final sampleOrders = await db.rawQuery("SELECT * FROM orders LIMIT 3");
+        log('🔍 DEBUG: Sample orders:');
+        for (int i = 0; i < sampleOrders.length; i++) {
+          final order = sampleOrders[i];
+          log('   Order ${i + 1}: ID=${order['id']}, Customer=${order['customer_name']}, BillCode=${order['bill_code']}');
+        }
+      }
+    } catch (e) {
+      log('❌ DEBUG: Error checking database: $e');
+    }
+  }
+
+  // ENHANCED: loadAllOrders with more debugging
   Future<void> loadAllOrders() async {
     try {
       log('🔄 Loading all orders from SQLite...');
 
+      // First check database directly
+      await _debugDatabaseInfo();
+
       final orders = await _dbHelper.getAllOrders();
-      log('📊 Raw orders from database: ${orders.length}');
+      log('📊 Raw orders from database via DatabaseHelper: ${orders.length}');
 
       if (orders.isEmpty) {
-        log('⚠️  No orders found in database');
+        log('⚠️ No orders found in database via DatabaseHelper');
+
+        // Try direct database query as fallback
+        try {
+          final db = await _dbHelper.database;
+          final directOrders =
+              await db.query('orders', orderBy: 'created_at DESC');
+          log('🔍 DEBUG: Direct query result: ${directOrders.length} orders');
+
+          if (directOrders.isNotEmpty) {
+            log('⚠️ DatabaseHelper.getAllOrders() is not working, but direct query works!');
+            // Process direct orders
+            await _processDirectOrders(directOrders);
+            return;
+          }
+        } catch (e) {
+          log('❌ DEBUG: Direct query also failed: $e');
+        }
+
         _orders.clear();
         return;
       }
 
-      // Process orders to add parsed items
+      // Process orders - the items are already parsed in DatabaseHelper.getAllOrders()
       final processedOrders = <Map<String, dynamic>>[];
 
       for (var order in orders) {
         try {
           final processedOrder = Map<String, dynamic>.from(order);
 
-          // Parse items from JSON string
-          if (order['items'] != null && order['items'].toString().isNotEmpty) {
-            try {
-              final items = jsonDecode(order['items']);
-              processedOrder['parsed_items'] = items;
-              log('✅ Parsed items for order ${order['id']}: ${items.length} items');
-            } catch (e) {
-              log('❌ Error parsing items for order ${order['id']}: $e');
-              processedOrder['parsed_items'] = [];
-            }
-          } else {
-            processedOrder['parsed_items'] = [];
-          }
+          // Items are already parsed in DatabaseHelper, just use them
+          processedOrder['parsed_items'] = order['items'] ?? [];
 
           processedOrders.add(processedOrder);
+
+          // Debug log for first few orders
+          if (processedOrders.length <= 3) {
+            log('📄 Order ${processedOrders.length}:');
+            log('   - ID: ${order['id']}');
+            log('   - Customer: ${order['customer_name']}');
+            log('   - Bill Code: ${order['bill_code']}');
+            log('   - Total Amount: ${order['total_amount']}');
+            log('   - Items Count: ${(order['items'] as List?)?.length ?? 0}');
+            log('   - Created At: ${order['created_at']}');
+          }
         } catch (e) {
           log('❌ Error processing order ${order['id']}: $e');
         }
@@ -123,22 +184,60 @@ class BillsController extends GetxController {
       _orders.assignAll(processedOrders);
       log('✅ Loaded ${processedOrders.length} orders from SQLite successfully');
 
-      // Debug: Log first order
-      if (processedOrders.isNotEmpty) {
-        final firstOrder = processedOrders.first;
-        log('📄 First order details: Customer: ${firstOrder['customer_name']}, Bill Code: ${firstOrder['bill_code']}');
-      }
+      // Force UI update
+      _orders.refresh();
     } catch (e) {
       log('❌ Error loading orders: $e');
-      _showErrorSnackbar('Failed to load orders');
+      _showErrorSnackbar('Failed to load orders: $e');
       _orders.clear();
     }
   }
 
-  // Refresh orders - FIXED
+  // NEW: Process direct database orders as fallback
+  Future<void> _processDirectOrders(
+      List<Map<String, dynamic>> directOrders) async {
+    try {
+      log('🔧 Processing direct database orders...');
+
+      final processedOrders = <Map<String, dynamic>>[];
+
+      for (var order in directOrders) {
+        try {
+          final processedOrder = Map<String, dynamic>.from(order);
+
+          // Parse items JSON manually
+          if (order['items'] != null && order['items'] is String) {
+            try {
+              final itemsData = jsonDecode(order['items']);
+              processedOrder['parsed_items'] = itemsData;
+            } catch (e) {
+              log('⚠️ Error parsing items for order ${order['id']}: $e');
+              processedOrder['parsed_items'] = [];
+            }
+          } else {
+            processedOrder['parsed_items'] = [];
+          }
+
+          processedOrders.add(processedOrder);
+
+          log('📄 Processed Order: Customer=${order['customer_name']}, BillCode=${order['bill_code']}');
+        } catch (e) {
+          log('❌ Error processing direct order ${order['id']}: $e');
+        }
+      }
+
+      _orders.assignAll(processedOrders);
+      log('✅ Processed ${processedOrders.length} direct orders successfully');
+      _orders.refresh();
+    } catch (e) {
+      log('❌ Error processing direct orders: $e');
+    }
+  }
+
+  // FIXED: Simplified refreshOrders
   Future<void> refreshOrders() async {
     if (_isRefreshing.value) {
-      log('⚠️  Already refreshing, skipping...');
+      log('⚠️ Already refreshing, skipping...');
       return;
     }
 
@@ -148,7 +247,14 @@ class BillsController extends GetxController {
     try {
       await _checkConnectivity();
       await loadAllOrders();
-      _showSuccessSnackbar('Orders refreshed');
+
+      if (_orders.isNotEmpty) {
+        _showSuccessSnackbar(
+            'Orders refreshed - ${_orders.length} bills found');
+      } else {
+        log('⚠️ No orders found after refresh');
+        _showInfoSnackbar('No bills found');
+      }
       log('✅ Orders refreshed successfully');
     } catch (e) {
       log('❌ Error refreshing orders: $e');
@@ -158,13 +264,24 @@ class BillsController extends GetxController {
     }
   }
 
-  // Force reload method - NEW
+  // FIXED: Force reload method
   Future<void> forceReload() async {
     log('🔄 Force reloading orders...');
     _isLoading.value = true;
     _orders.clear();
+
+    try {
+      await loadAllOrders();
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  // Add method to manually trigger database check
+  Future<void> debugCheckDatabase() async {
+    log('🔍 Manual database check triggered...');
+    await _debugDatabaseInfo();
     await loadAllOrders();
-    _isLoading.value = false;
   }
 
   // Sync/Upload single order to Firebase
@@ -197,13 +314,21 @@ class BillsController extends GetxController {
 
       final order = _orders[orderIndex];
 
-      // Parse items from JSON string
+      // Get items - they should already be parsed
       List<Map<String, dynamic>> items = [];
-      if (order['items'] != null) {
+      if (order['parsed_items'] != null && order['parsed_items'] is List) {
+        items = List<Map<String, dynamic>>.from(order['parsed_items']);
+      } else if (order['items'] != null) {
+        // Fallback: try to parse items if they're still in JSON format
         try {
-          final itemsData = jsonDecode(order['items']);
-          items = List<Map<String, dynamic>>.from(itemsData);
+          if (order['items'] is String) {
+            final itemsData = jsonDecode(order['items']);
+            items = List<Map<String, dynamic>>.from(itemsData);
+          } else if (order['items'] is List) {
+            items = List<Map<String, dynamic>>.from(order['items']);
+          }
         } catch (e) {
+          log('❌ Error parsing items for sync: $e');
           throw Exception('Failed to parse order items');
         }
       }
@@ -354,32 +479,50 @@ class BillsController extends GetxController {
     }
   }
 
+  // FIXED: Update getOrderTotal to use 'rate' field from new data model
   double getOrderTotal(Map<String, dynamic> order) {
     try {
+      // First check if we have total_amount directly
+      if (order['total_amount'] != null) {
+        return double.tryParse(order['total_amount'].toString()) ?? 0.0;
+      }
+
+      // Calculate from items using NEW data model fields
       final items = order['parsed_items'] ?? order['items'];
       if (items != null && items is List) {
         return items.fold(0.0, (sum, item) {
-          final price =
-              double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
+          // Use 'rate' field from new data model (not 'price')
+          final rate = double.tryParse(item['rate']?.toString() ?? '0') ?? 0.0;
           final quantity =
               int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
-          return sum + (price * quantity);
+          return sum + (rate * quantity);
         });
       }
-      return double.tryParse(order['total_amount']?.toString() ?? '0') ?? 0.0;
+
+      return 0.0;
     } catch (e) {
+      log('Error calculating order total: $e');
       return 0.0;
     }
   }
 
+  // FIXED: Update getOrderItemsCount to handle new data model
   int getOrderItemsCount(Map<String, dynamic> order) {
     try {
+      // First check if we have total_items directly
+      if (order['total_items'] != null) {
+        return int.tryParse(order['total_items'].toString()) ?? 0;
+      }
+
+      // Count from parsed items
       final items = order['parsed_items'] ?? order['items'];
       if (items != null && items is List) {
         return items.length;
       }
-      return int.tryParse(order['total_items']?.toString() ?? '0') ?? 0;
+
+      return 0;
     } catch (e) {
+      log('Error getting items count: $e');
       return 0;
     }
   }

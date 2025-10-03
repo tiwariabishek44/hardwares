@@ -44,18 +44,19 @@ class SavedItemsService extends GetxService {
     }
   }
 
-  // Add or update item
+  // Add or update item - Updated to work with new data structure
   void addOrUpdateItem(Map<String, dynamic> newItem) {
-    final id = newItem['id'];
-    final selectedSize = newItem['selectedSize'];
+    final uniqueKey = newItem['uniqueKey'];
 
-    // Check if item with same ID and size already exists
-    int existingItemIndex = savedItems.indexWhere((savedItem) =>
-        savedItem['id'] == id && savedItem['selectedSize'] == selectedSize);
+    // Check if item with same uniqueKey already exists
+    int existingItemIndex = savedItems
+        .indexWhere((savedItem) => savedItem['uniqueKey'] == uniqueKey);
 
     if (existingItemIndex != -1) {
       // Update quantity of existing item
       savedItems[existingItemIndex]['quantity'] += newItem['quantity'];
+      savedItems[existingItemIndex]['dateAdded'] =
+          newItem['dateAdded']; // Update date
     } else {
       // Add new item
       savedItems.add(newItem);
@@ -63,7 +64,7 @@ class SavedItemsService extends GetxService {
 
     _saveToStorage();
     savedItems.refresh();
-    log('SavedItemsService: Item added/updated - ${newItem['nameEnglish']}');
+    log('SavedItemsService: Item added/updated - ${newItem['itemName']}');
   }
 
   // Remove item by index

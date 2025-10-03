@@ -4,13 +4,32 @@ import 'package:get/get.dart';
 import 'package:responsive_sizer/responsive_sizer.dart';
 import 'package:hardwares/app/modules/bills_detail/bills_detail_controller.dart';
 
-class BillsDetailView extends StatelessWidget {
+class BillsDetailView extends StatefulWidget {
   BillsDetailView({Key? key}) : super(key: key);
 
+  @override
+  State<BillsDetailView> createState() => _BillsDetailViewState();
+}
+
+class _BillsDetailViewState extends State<BillsDetailView> {
   final BillsDetailController controller = Get.put(BillsDetailController());
 
   @override
+  void initState() {
+    super.initState();
+
+    final isSynced = controller.orderData['synced'] == 1;
+
+    if (!isSynced) {
+      // Sync to Firebase first
+      controller.syncToFirebaseBeforeShare();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Check if order needs to be synced first
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
@@ -85,7 +104,7 @@ class BillsDetailView extends StatelessWidget {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'This bill will be synced to cloud when you share it',
+                      'This bill needs to be uploaded to the server',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.orange[700],
@@ -283,19 +302,36 @@ class BillsDetailView extends StatelessWidget {
 
     for (var item in controller.orderItems) {
       String category = (item['category'] ?? 'OTHERS').toString().toUpperCase();
+      String companyName =
+          (item['companyName'] == 'Nepatop' ? 'Nepatop' : '').toString();
 
-      if (!groupedItems.containsKey(category)) {
-        groupedItems[category] = [];
+      // Create a combined key: "CATEGORY - COMPANY"
+      String groupKey = '$category - $companyName';
+
+      if (!groupedItems.containsKey(groupKey)) {
+        groupedItems[groupKey] = [];
       }
-      groupedItems[category]!.add(item);
+      groupedItems[groupKey]!.add(item);
     }
 
-    // Sort categories alphabetically, but keep OTHERS at the end
+    // Sort groups: First by category, then by company
     var sortedKeys = groupedItems.keys.toList()
       ..sort((a, b) {
-        if (a == 'OTHERS') return 1;
-        if (b == 'OTHERS') return -1;
-        return a.compareTo(b);
+        // Extract category and company from keys
+        String categoryA = a.split(' - ')[0];
+        String categoryB = b.split(' - ')[0];
+
+        if (categoryA == 'OTHERS') return 1;
+        if (categoryB == 'OTHERS') return -1;
+
+        // First sort by category
+        int categoryComparison = categoryA.compareTo(categoryB);
+        if (categoryComparison != 0) return categoryComparison;
+
+        // Then sort by company within same category
+        String companyA = a.split(' - ')[1];
+        String companyB = b.split(' - ')[1];
+        return companyA.compareTo(companyB);
       });
 
     Map<String, List<Map<String, dynamic>>> sortedGroupedItems = {};
@@ -307,14 +343,19 @@ class BillsDetailView extends StatelessWidget {
   }
 
   Widget _buildCategorySection(
-      String category,
+      String categoryCompany, // This now contains "CATEGORY - COMPANY"
       List<Map<String, dynamic>> categoryItems,
       Map<String, List<Map<String, dynamic>>> allGroupedItems) {
-    bool isLastCategory = allGroupedItems.keys.last == category;
+    bool isLastCategory = allGroupedItems.keys.last == categoryCompany;
+
+    // Split the key to get category and company
+    List<String> parts = categoryCompany.split(' - ');
+    String category = parts[0];
+    String companyName = parts.length > 1 ? parts[1] : 'Unknown';
 
     return Column(
       children: [
-        // Category Header
+        // Category Header with Company
         Container(
           width: double.infinity,
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -326,6 +367,7 @@ class BillsDetailView extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // Category Badge
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -342,7 +384,27 @@ class BillsDetailView extends StatelessWidget {
                   ),
                 ),
               ),
+              SizedBox(width: 8),
+              // Company Badge
+              if (companyName != "")
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[600],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    companyName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
               SizedBox(width: 12),
+              // Item count
               Text(
                 '${categoryItems.length} items',
                 style: TextStyle(
@@ -377,73 +439,101 @@ class BillsDetailView extends StatelessWidget {
                 bottom: BorderSide(color: Colors.grey[200]!, width: 1),
               ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Item Number
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[400]!),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Center(
-              child: Text(
-                '$index',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
+          Row(
+            children: [
+              // Item Number
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[400]!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    '$index',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          SizedBox(width: 12),
+              SizedBox(width: 12),
 
-          // Item Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item['nameEnglish'] ?? item['name'] ?? 'Unknown Item',
+              // Item Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['itemName'] ?? 'Unknown Item',
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                    ),
+                    if (item['selectedSize'] != null) ...[
+                      SizedBox(height: 2),
+                      Text(
+                        '${item['selectedVariantType'] ?? ''} -> Size: ${item['selectedSize']}',
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          color: const Color.fromARGB(255, 20, 20, 20),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Quantity
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 0.5.h),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[400]!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Qty:${item['quantity'] ?? 1} ${item['unit'] == 'meter' ? " mtr" : ' pic'}',
                   style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: Colors.black,
                   ),
                 ),
-                if (item['selectedSize'] != null) ...[
-                  SizedBox(height: 2),
-                  Text(
-                    'Size: ${item['selectedSize']}',
+              ),
+            ],
+          ),
+          if (item['subType'] == 'pipe') ...[
+            SizedBox(height: 8),
+            Row(
+              children: [
+                SizedBox(width: 36), // Align with item name
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${item['subVariant']}',
+                    maxLines: 2,
                     style: TextStyle(
-                      fontSize: 13,
-                      color: const Color.fromARGB(255, 20, 20, 20),
+                      fontSize: 15.sp,
+                      color: Colors.black,
                     ),
                   ),
-                ],
+                ),
               ],
             ),
-          ),
-
-          // Quantity
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 0.5.h),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[400]!),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'Qty:${item['quantity'] ?? 1} pic',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -482,31 +572,24 @@ class BillsDetailView extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(
-                              width: 16,
-                              height: 16,
+                              width: 20,
+                              height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: Colors.white,
                               ),
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Generating...',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
+                            SizedBox(width: 12),
+                            Text('Generating PDF...'),
                           ],
                         )
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.share, color: Colors.white, size: 20),
-                            SizedBox(width: 8),
+                            Icon(Icons.image, color: Colors.white, size: 24),
+                            SizedBox(width: 12),
                             Text(
-                              'Share PDF',
+                              'Share as PDF',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,

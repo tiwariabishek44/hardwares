@@ -102,8 +102,6 @@ class TransactionEntryView extends StatelessWidget {
             SizedBox(height: 12),
             _buildAmountCard(),
             SizedBox(height: 12),
-            _buildDescriptionCard(),
-            SizedBox(height: 12),
             _buildDateCard(),
             SizedBox(height: 24),
           ],
@@ -279,7 +277,7 @@ class TransactionEntryView extends StatelessWidget {
   Widget _buildAmountCard() {
     return Card(
       color: Colors.white,
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      margin: EdgeInsets.symmetric(horizontal: 6, vertical: 0),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -319,13 +317,6 @@ class TransactionEntryView extends StatelessWidget {
                             color: Color(0xFF1E293B),
                           ),
                         ),
-                        Text(
-                          _getAmountSectionTitleNepali(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
                       ],
                     )),
               ],
@@ -349,14 +340,6 @@ class TransactionEntryView extends StatelessWidget {
                         color: Color(0xFF475569),
                       ),
                     ),
-                    Text(
-                      " / रकम",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
                   ],
                 ),
                 SizedBox(height: 8),
@@ -373,7 +356,7 @@ class TransactionEntryView extends StatelessWidget {
                         RegExp(r'^\d+\.?\d{0,2}')),
                   ],
                   decoration: InputDecoration(
-                    hintText: 'Enter amount / रकम प्रविष्ट गर्नुहोस्',
+                    hintText: 'Enter amount  ',
                     prefixIcon: Container(
                       width: 50,
                       padding: EdgeInsets.symmetric(vertical: 16),
@@ -457,14 +440,6 @@ class TransactionEntryView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Maximum allowed: Rs. ${NumberFormat('#,##,###.00').format(controller.maxAllowedAmount.value)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: controller.primaryColor,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
                               'अधिकतम रकम: रू. ${NumberFormat('#,##,###.00').format(controller.maxAllowedAmount.value)}',
                               style: TextStyle(
                                 fontSize: 12,
@@ -499,125 +474,6 @@ class TransactionEntryView extends StatelessWidget {
           ? 'Amount to Pay'
           : 'Amount Paid';
     }
-  }
-
-  String _getAmountSectionTitleNepali() {
-    String partyType = controller.partyData['party_type'] ?? 'customer';
-
-    if (partyType == 'customer') {
-      return controller.selectedTransactionType.value == 'paune_parne'
-          ? 'पाउनु पर्ने रकम'
-          : 'प्राप्त भएको रकम';
-    } else {
-      return controller.selectedTransactionType.value == 'paune_parne'
-          ? 'तिर्नु पर्ने रकम'
-          : 'भुक्तानी गरेको रकम';
-    }
-  }
-
-  Widget _buildDescriptionCard() {
-    return Card(
-      color: Colors.white,
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.description_outlined,
-                    size: 18,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          "Description",
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        Text(
-                          " (Optional)",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      "विवरण (वैकल्पिक)",
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            SizedBox(height: 16),
-            Divider(height: 1, thickness: 1, color: Color(0xFFEDF2F7)),
-            SizedBox(height: 16),
-
-            // Description field
-            TextFormField(
-              controller: controller.descriptionController,
-              maxLines: 3,
-              style: TextStyle(
-                fontSize: 15,
-                color: Color(0xFF1E293B),
-              ),
-              decoration: InputDecoration(
-                hintText: 'Add notes about this transaction...',
-                hintStyle: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF94A3B8),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF64748B), width: 1.5),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                contentPadding: EdgeInsets.all(16),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildDateCard() {

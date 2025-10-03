@@ -18,9 +18,9 @@ class SplashView extends StatelessWidget {
           height: double.infinity,
           child: Column(
             children: [
-              // Top Section
+              // Top Section - REDUCED FLEX
               Expanded(
-                flex: 2,
+                flex: 3, // Changed from 2 to 3
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -114,9 +114,10 @@ class SplashView extends StatelessWidget {
                 ),
               ),
 
-              // Middle Section - Loading
-              Expanded(
-                flex: 1,
+              // Middle Section - Loading (REDUCED SPACING)
+              Container(
+                padding: EdgeInsets.only(
+                    bottom: 20), // Added bottom padding instead of Expanded
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -172,6 +173,7 @@ class SplashView extends StatelessWidget {
                 ),
               ),
 
+              // Bottom Section
               Container(
                 padding: EdgeInsets.only(bottom: 32),
                 child: Obx(() => AnimatedOpacity(

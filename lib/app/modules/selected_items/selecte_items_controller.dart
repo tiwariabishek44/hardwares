@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:hardwares/app/data/price_lists/item_price_list.dart';
-import 'package:hardwares/app/data/price_lists/price_list.dart';
 import 'package:hardwares/app/services/saved_items_service.dart';
 
 class SelectedItemsController extends GetxController {
   final SavedItemsService _savedItemsService = Get.find<SavedItemsService>();
   var isLoading = false.obs;
-  var brand = ''.obs;
-  var appliedCompanyCode = ''.obs;
 
   // Selection mode variables
   var isSelectionMode = false.obs;
   var selectedItems = <int>[].obs;
-
-  // Progress indicator for price updates
-  var priceUpdateProgress = 0.0.obs; // Progress value (0.0 to 1.0)
-  var isPriceUpdateLoading = false.obs;
 
   // Use the shared service's saved items
   RxList<Map<String, dynamic>> get locallySavedItems =>
@@ -114,53 +106,13 @@ class SelectedItemsController extends GetxController {
   // Get total number of items
   int get totalItems => _savedItemsService.totalItems;
 
-  // Update the applyCompanyPrices method
-  Future<void> applyCompanyPrices(String companyCode) async {
-    isLoading.value = true;
-    isPriceUpdateLoading.value = true;
-    priceUpdateProgress.value = 0.0;
-    appliedCompanyCode.value = companyCode;
-
-    // Get items only for the selected company
-    final priceList = CompanyPriceList.getItemsByCompany(companyCode);
-
-    final totalItems = locallySavedItems.length;
-    for (int i = 0; i < totalItems; i++) {
-      final item = locallySavedItems[i];
-      final match = priceList.firstWhere(
-        (p) => p.itemCode == item['itemCode'],
-        orElse: () => ItemPriceList(
-          id: -1,
-          companyCode: '',
-          itemName: '',
-          category: '',
-          itemCode: '',
-          sizeVariants: {},
-        ),
-      );
-
-      if (match.itemCode.isNotEmpty) {
-        final size = item['selectedSize'] as String?;
-        final unitPrice = match.sizeVariants[size] ?? 0.0;
-        item['rate'] = unitPrice;
-      } else {
-        item['rate'] = 0.0;
-      }
-
-      // Update progress
-      await Future.delayed(const Duration(milliseconds: 100));
-      priceUpdateProgress.value = (i + 1) / totalItems;
-    }
-
-    locallySavedItems.refresh();
-    isLoading.value = false;
-    isPriceUpdateLoading.value = false;
-    priceUpdateProgress.value = 0.0;
-  }
-
+  // Calculate grand total from existing rates
   double get grandTotal => locallySavedItems.fold(
         0.0,
-        (sum, item) =>
-            sum + ((item['rate'] * (item['quantity'])) as double? ?? 0.0),
+        (sum, item) {
+          final rate = (item['rate'] ?? 0.0) as double;
+          final quantity = (item['quantity'] ?? 1) as int;
+          return sum + (rate * quantity);
+        },
       );
 }

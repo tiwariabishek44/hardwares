@@ -33,20 +33,22 @@ class BillsDetailController extends GetxController {
         orderData.value = arguments;
         log('📄 Received order data: ${arguments.keys}');
 
-        // Parse items from the database - FIXED
+        // Parse items from the database - FIXED FOR NEW DATA MODEL
         if (arguments['items'] != null) {
           try {
             // The 'items' column contains JSON string from SQLite
             String itemsJsonString = arguments['items'].toString();
-            log('📦 Raw items JSON: $itemsJsonString');
+            log('📦 Raw items JSON: ${itemsJsonString.substring(0, itemsJsonString.length > 200 ? 200 : itemsJsonString.length)}...');
 
             List<dynamic> itemsData = jsonDecode(itemsJsonString);
             orderItems.value =
                 itemsData.map((item) => item as Map<String, dynamic>).toList();
 
             log('✅ Successfully parsed ${orderItems.length} items');
-            for (int i = 0; i < orderItems.length; i++) {
-              log('   Item ${i + 1}: ${orderItems[i]['nameEnglish'] ?? orderItems[i]['name']}');
+
+            // Debug: Print first item structure using NEW data model fields
+            if (orderItems.isNotEmpty) {
+              final firstItem = orderItems.first;
             }
           } catch (e) {
             log('❌ Error parsing items JSON: $e');
@@ -71,12 +73,13 @@ class BillsDetailController extends GetxController {
               List<Map<String, dynamic>>.from(arguments['parsed_items']);
           log('✅ Used parsed_items: ${orderItems.length} items');
         } else {
-          log('⚠️  No items found in order data');
+          log('⚠️ No items found in order data');
           orderItems.value = [];
         }
 
         log('📊 Final items count: ${orderItems.length}');
         log('📄 Order for customer: ${arguments['customer_name']}');
+        log('💰 Total amount: ${arguments['total_amount']}');
       } else {
         log('❌ No arguments received');
       }
@@ -127,7 +130,7 @@ class BillsDetailController extends GetxController {
     }
   }
 
-  // Calculate total quantity
+  // UPDATED: Calculate total quantity using new data model
   int get totalQuantity {
     return orderItems.fold(
         0, (sum, item) => sum + (item['quantity'] as int? ?? 1));
@@ -167,18 +170,60 @@ class BillsDetailController extends GetxController {
     return '';
   }
 
-  // Calculate total amount
+  // UPDATED: Calculate total amount using new data model (rate field)
   double get totalAmount {
     if (orderData['total_amount'] != null) {
       return double.tryParse(orderData['total_amount'].toString()) ?? 0.0;
     }
 
-    // Calculate from items if not stored
+    // Calculate from items using NEW data model fields
     return orderItems.fold(0.0, (sum, item) {
-      double price = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
+      // Use 'rate' field from new data model (not 'price')
+      double rate = double.tryParse(item['rate']?.toString() ?? '0') ?? 0.0;
       int quantity = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
-      return sum + (price * quantity);
+      return sum + (rate * quantity);
     });
+  }
+
+  // UPDATED: Get item name using new data model
+  String getItemName(Map<String, dynamic> item) {
+    // Use 'itemName' field from new data model
+    return item['itemName'] ??
+        item['name'] ??
+        item['nameEnglish'] ??
+        'Unknown Item';
+  }
+
+  // NEW: Get item company name
+  String getItemCompany(Map<String, dynamic> item) {
+    return item['companyName'] ?? 'N/A';
+  }
+
+  // UPDATED: Get item size/variant info
+  String getItemSizeVariant(Map<String, dynamic> item) {
+    String variant = item['selectedVariantType'] ?? '';
+    String size = item['selectedSize'] ?? '';
+
+    if (variant.isNotEmpty && size.isNotEmpty) {
+      return '$variant - $size';
+    } else if (size.isNotEmpty) {
+      return size;
+    } else if (variant.isNotEmpty) {
+      return variant;
+    }
+    return '';
+  }
+
+  // NEW: Get item rate
+  double getItemRate(Map<String, dynamic> item) {
+    return double.tryParse(item['rate']?.toString() ?? '0') ?? 0.0;
+  }
+
+  // NEW: Get item total (rate * quantity)
+  double getItemTotal(Map<String, dynamic> item) {
+    double rate = getItemRate(item);
+    int quantity = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
+    return rate * quantity;
   }
 
   Future<void> shareAsPdf() async {
@@ -190,15 +235,16 @@ class BillsDetailController extends GetxController {
 
       if (!isSynced) {
         // Sync to Firebase first
-        await _syncToFirebaseBeforeShare();
+        await syncToFirebaseBeforeShare();
       }
 
+      // UPDATED: Pass items with new data model
       await BillPdfGenerator.generateAndShareBillPdf(
         billCode: billCode,
         customerName: customerName,
         phoneNumber: phoneNumber,
         orderDate: orderDate,
-        items: orderItems,
+        items: orderItems, // Items already in new data model format
         plumberName: orderData['plumber_name'] ?? 'Unknown Plumber',
       );
     } catch (e) {
@@ -209,8 +255,8 @@ class BillsDetailController extends GetxController {
     }
   }
 
-  // New method to sync before sharing
-  Future<void> _syncToFirebaseBeforeShare() async {
+  // UPDATED: Sync to Firebase using new data model
+  Future<void> syncToFirebaseBeforeShare() async {
     try {
       // Import required services
       final DatabaseHelper _dbHelper = DatabaseHelper();
@@ -226,14 +272,14 @@ class BillsDetailController extends GetxController {
 
       final orderId = orderData['id'] as int;
 
-      // Sync to Firebase
+      // Sync to Firebase using new data model
       await _firebaseService.saveRequirementListToFirebase(
         billCode: orderData['bill_code'],
         customerName: orderData['customer_name'] ?? '',
         phoneNumber: orderData['phone_number'] ?? '',
         plumberId: _loginController.getPlumberId(),
         plumberName: _loginController.getUserName(),
-        items: orderItems,
+        items: orderItems, // Items already in new data model format
       );
 
       // Mark as synced in SQLite
@@ -271,19 +317,12 @@ class BillsDetailController extends GetxController {
           ),
           actions: [
             TextButton(
-              onPressed: () => Get.back(),
+              onPressed: () => Navigator.of(Get.context!).pop(),
               child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Get.back();
-                shareAsPdf(); // Retry
-              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red[600],
                 foregroundColor: Colors.white,
               ),
-              child: Text('Retry'),
             ),
           ],
         ),

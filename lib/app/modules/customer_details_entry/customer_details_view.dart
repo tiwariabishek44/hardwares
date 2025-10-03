@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:hardwares/app/utils/price_formatter.dart';
+import 'package:responsive_sizer/responsive_sizer.dart';
 import 'customer_details_controller.dart';
 
 class CustomerDetailsView extends StatefulWidget {
@@ -32,9 +34,9 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
     return AppBar(
       scrolledUnderElevation: 0,
       title: Text(
-        'ग्राहक विवरण',
+        'Customer Information',
         style: TextStyle(
-          fontSize: 18,
+          fontSize: 18.sp,
           fontWeight: FontWeight.w600,
           color: Color(0xFF212121),
         ),
@@ -42,7 +44,7 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
       backgroundColor: Colors.white,
       foregroundColor: Color(0xFF212121),
       elevation: 0,
-      centerTitle: true,
+      centerTitle: false,
       leading: IconButton(
         icon: Icon(Icons.arrow_back, color: Color(0xFF212121), size: 24),
         onPressed: () => Navigator.pop(context),
@@ -77,27 +79,6 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Row(
-              children: [
-                Icon(
-                  Icons.person_outline,
-                  color: Color(0xFF1976D2),
-                  size: 20,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Customer Information',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF212121),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-
             // Customer Name Field
             _buildTextField(
               controller: controller.customerNameController,
@@ -228,7 +209,8 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Total Price:', style: TextStyle(fontSize: 15)),
-                  Text('Rs ${controller.total.value.toStringAsFixed(2)}',
+                  Text(
+                      '  ${PriceFormatter.formatPriceForDisplay(controller.total.value)}   ',
                       style:
                           TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                 ],
@@ -267,7 +249,7 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
                   Text('Amount Discounted:',
                       style: TextStyle(fontSize: 15, color: Colors.red[700])),
                   Text(
-                    'Rs ${(controller.total.value * controller.discount.value / 100).toStringAsFixed(2)}',
+                    '  ${PriceFormatter.formatPriceForDisplay(controller.total.value * controller.discount.value / 100)}',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
@@ -289,7 +271,8 @@ class _CustomerDetailsViewState extends State<CustomerDetailsView> {
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.green[800])),
-                  Text('Rs ${controller.finalTotal.value.toStringAsFixed(2)}',
+                  Text(
+                      '  ${PriceFormatter.formatPriceForDisplay(controller.finalTotal.value)}',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

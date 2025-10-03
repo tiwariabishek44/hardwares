@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hardwares/app/modules/bills/bills_controller.dart';
 import 'package:hardwares/app/modules/login/login_controller.dart';
 import 'package:hardwares/app/services/saved_items_service.dart';
 import 'package:hardwares/app/utils/database_helper.dart';
@@ -91,13 +92,35 @@ class CustomerDetailsController extends GetxController {
 
               // Title
               Text(
-                '  Saved Successfully',
+                'Saved Successfully',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
               ),
+
+              SizedBox(height: 12),
+
+              // Bill Code Display
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  'Bill Code: ${billCode.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blueGrey[800],
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 20),
 
               // OK Button
               SizedBox(
@@ -111,6 +134,12 @@ class CustomerDetailsController extends GetxController {
                     Navigator.of(Get.context!).pop(); // Close success dialog
                     Navigator.of(Get.context!)
                         .pop(); // Go back to previous screen
+
+                    // Force refresh bills if BillsController exists
+                    if (Get.isRegistered<BillsController>()) {
+                      final billsController = Get.find<BillsController>();
+                      billsController.forceReload();
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
@@ -139,15 +168,25 @@ class CustomerDetailsController extends GetxController {
 
   void submitOrder() async {
     // Close keyboard first
+    FocusScope.of(Get.context!).unfocus();
 
     if (formKey.currentState!.validate()) {
       isSubmitting.value = true;
 
       try {
+        // DEBUG: Log the items we're trying to save
+        log('🔍 DEBUG: Items to save:');
+        for (int i = 0; i < selectedItems.length; i++) {
+          final item = selectedItems[i];
+          log('   Item $i: ${item['itemName']} - Rate: ${item['rate']} - Qty: ${item['quantity']}');
+        }
+
         // Save to SQLite only - Simple and straightforward
         log('Saving order to local database (SQLite)');
+        log("subtype is ${selectedItems[0]['subType']}");
 
-        int orderId = await _dbHelper.insertOrder(
+        // FIXED: insertOrder now returns bill_code directly
+        String billCode = await _dbHelper.insertOrder(
           customerName: customerNameController.text.trim(),
           phoneNumber: phoneNumberController.text.trim(),
           plumberName: loginController.getUserName(),
@@ -155,11 +194,16 @@ class CustomerDetailsController extends GetxController {
           items: selectedItems,
         );
 
-        // Get the created order with bill code
-        final createdOrder = await _dbHelper.getOrderById(orderId);
-        String billCode = createdOrder['bill_code'];
+        log('✅ Order saved to SQLite successfully with Bill Code: $billCode');
 
-        log('✅ Order saved to SQLite with ID: $orderId, Bill Code: $billCode');
+        // DEBUG: Verify the order was saved by checking database
+        final allOrders = await _dbHelper.getAllOrders();
+        log('🔍 DEBUG: Total orders in database after save: ${allOrders.length}');
+
+        if (allOrders.isNotEmpty) {
+          final lastOrder = allOrders.first; // Since ordered by created_at DESC
+          log('🔍 DEBUG: Last saved order - Customer: ${lastOrder['customer_name']}, Bill Code: ${lastOrder['bill_code']}');
+        }
 
         await Future.delayed(const Duration(seconds: 1));
 
@@ -191,7 +235,7 @@ class CustomerDetailsController extends GetxController {
             ),
             actions: [
               ElevatedButton(
-                onPressed: () => Get.back(),
+                onPressed: () => Navigator.of(Get.context!).pop(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
